@@ -1,35 +1,28 @@
 const { ActivityHandler } = require('botbuilder');
-const axios = require('axios');
-require('dotenv').config();
+const { scheduleMeeting } = require('./schedular');
+const { v4: uuidv4 } = require('uuid');
 
 class TeamsRecordingBot extends ActivityHandler {
     constructor() {
         super();
         this.onMessage(async (context, next) => {
-            const text = context.activity.text ? context.activity.text.trim().toLowerCase() : '';
+            const text = context.activity.text ? context.activity.text.trim() : '';
             console.log('Received message:', text);
 
-            if (text.startsWith('start recording')) {
-                let meetingUrl = process.env.DEFAULT_MEETING_URL;
-                let duration = process.env.RECORDING_DURATION || 60;
-
-                const parts = context.activity.text.split(':');
-                if (parts.length > 1 && parts[1].trim()) {
-                    meetingUrl = parts.slice(1).join(':').trim();
+            if (text.startsWith('schedule recording:')) {
+                // Example: schedule recording: <meeting_url> at <YYYY-MM-DD HH:mm>
+                const match = text.match(/schedule recording:\s*(\S+)\s*at\s*([\d-]+\s+[\d:]+)/i);
+                if (match) {
+                    const meetingUrl = match[1];
+                    const startTime = new Date(match[2]);
+                    const jobId = uuidv4();
+                    scheduleMeeting(meetingUrl, startTime, jobId);
+                    await context.sendActivity(`Scheduled recording for ${startTime}.\nJob ID: ${jobId}`);
+                } else {
+                    await context.sendActivity('Invalid format. Use: schedule recording: <meeting_url> at <YYYY-MM-DD HH:mm>');
                 }
-
-                await context.sendActivity('Starting the recording process...');
-
-                axios.post(`${process.env.RECORDING_BACKEND_URL}/start-recording`, {
-                    meetingUrl,
-                    duration
-                }).then(() => {
-                    console.log('Recording started');
-                }).catch((err) => {
-                    console.error('Recording error:', err.message);
-                });
             } else {
-                await context.sendActivity('Say "start recording" or "start recording: <meeting_url>" to begin.');
+                await context.sendActivity('Say "schedule recording: <meeting_url> at <YYYY-MM-DD HH:mm>" to schedule.');
             }
 
             await next();
